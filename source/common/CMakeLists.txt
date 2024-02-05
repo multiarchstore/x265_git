@@ -133,7 +133,6 @@ if(POWER)
     endif()
 endif()
 
-
 # set_target_properties can't do list expansion
 string(REPLACE ";" " " VERSION_FLAGS "${VFLAGS}")
 set_source_files_properties(version.cpp PROPERTIES COMPILE_FLAGS ${VERSION_FLAGS})
@@ -144,7 +143,11 @@ if(HAVE_STRTOK_R)
 endif()
 
 if(GCC AND CC_HAS_NO_NARROWING)
-    set_source_files_properties(cpu.cpp PROPERTIES COMPILE_FLAGS -Wno-narrowing)
+    if(ENABLE_ASSEMBLY)
+        set_source_files_properties(cpu.cpp PROPERTIES COMPILE_FLAGS "-DENABLE_ASSEMBLY=1 -Wno-narrowing")
+    else()
+        set_source_files_properties(cpu.cpp PROPERTIES COMPILE_FLAGS -Wno-narrowing)
+    endif()
 endif()
 if(WIN32)
     set(WINXP winxp.h winxp.cpp)
