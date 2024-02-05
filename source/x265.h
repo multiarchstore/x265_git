@@ -562,6 +562,10 @@ typedef enum
 /* IBM Power8 */
 #define X265_CPU_ALTIVEC         0x0000001
 
+/* LOONGARCH */
+#define X265_CPU_LSX             0x0000001
+#define X265_CPU_LASX            0x0000002
+
 #define X265_MAX_SUBPEL_LEVEL   7
 
 /* Log level */

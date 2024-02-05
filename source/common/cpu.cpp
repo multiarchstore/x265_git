@@ -123,7 +123,9 @@ const cpu_name_t cpu_names[] =
 #endif
 #elif X265_ARCH_POWER8
     { "Altivec",         X265_CPU_ALTIVEC },
-
+#elif X265_ARCH_LOONGARCH64
+    { "LSX",             X265_CPU_LSX},
+    { "LASX",            X265_CPU_LASX},
 #endif // if X265_ARCH_X86
     { "", 0 },
 };
@@ -415,7 +417,32 @@ uint32_t cpu_detect(bool benableavx512)
 #endif
 }
 
-#else // if X265_ARCH_POWER8
+#elif X265_ARCH_LOONGARCH64
+
+#include <sys/auxv.h>
+
+#define LA_HWCAP_LSX    ( 1U << 4 )
+#define LA_HWCAP_LASX   ( 1U << 5 )
+
+uint32_t cpu_detect( bool benableavx512 )
+{
+    uint32_t flags = 0;
+#if ENABLE_ASSEMBLY
+    uint32_t hwcap = (uint32_t)getauxval( AT_HWCAP );
+#if HAVE_LSX
+    if( hwcap & LA_HWCAP_LSX )
+        flags |= X265_CPU_LSX;
+#endif
+#if HAVE_LASX
+    if( hwcap & LA_HWCAP_LASX )
+        flags |= X265_CPU_LASX;
+#endif
+#endif
+
+    return flags;
+}
+
+#else // if X265_ARCH_LOONGARCH64
 
 uint32_t cpu_detect(bool benableavx512)
 {

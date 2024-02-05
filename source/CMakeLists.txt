@@ -53,6 +53,9 @@ list(FIND ARM_ALIASES "${SYSPROC}" ARMMATCH)
 list(FIND ARM64_ALIASES "${SYSPROC}" ARM64MATCH)
 set(POWER_ALIASES powerpc64 powerpc64le ppc64 ppc64le)
 list(FIND POWER_ALIASES "${SYSPROC}" POWERMATCH)
+set(LOONGARCH64_ALIASES loongarch64)
+list(FIND LOONGARCH64_ALIASES "${SYSPROC}" LOONGARCH64MATCH)
+
 if(X86MATCH GREATER "-1")
     set(X86 1)
     add_definitions(-DX265_ARCH_X86=1)
@@ -109,6 +112,10 @@ elseif(ARM64MATCH GREATER "-1")
     set(AARCH64_SVE_FLAG "-march=armv8.2-a+dotprod+i8mm+sve")
     # SVE2 is only available from Armv9.0, and armv9-a implies +dotprod and +sve.
     set(AARCH64_SVE2_FLAG "-march=armv9-a+i8mm+sve2")
+elseif(LOONGARCH64MATCH GREATER "-1")
+    set(LOONGARCH64 1)
+    add_definitions(-DLOONGARCH64=1 -DX265_ARCH_LOONGARCH64=1)
+    message(STATUS "Detected LOONGARCH64 target processor")
 else()
     message(STATUS "CMAKE_SYSTEM_PROCESSOR value `${CMAKE_SYSTEM_PROCESSOR}` is unknown")
     message(STATUS "Please add this value near ${CMAKE_CURRENT_LIST_FILE}:${CMAKE_CURRENT_LIST_LINE}")
@@ -410,6 +417,23 @@ int main() { return 0; }")
         list(APPEND ARM_ARGS -DPIC -fPIC)
     endif()
     add_definitions(${ARM_ARGS})
+    if(LOONGARCH64)
+        set(LOONGARCH64_ARGS -fPIC)
+
+        find_package(LSX)
+        find_package(LASX)
+
+        if(SUPPORTS_LSX)
+            add_definitions(-DHAVE_LSX=1)
+        endif()
+
+        if(SUPPORTS_LASX)
+            add_definitions(-DHAVE_LASX=1)
+        endif()
+
+    endif()
+    add_definitions(${LOONGARCH64_ARGS})
+
     if(FPROFILE_GENERATE)
         if(INTEL_CXX)
             add_definitions(-prof-gen -prof-dir="${CMAKE_CURRENT_BINARY_DIR}")
@@ -544,7 +568,7 @@ if(EXTRA_LIB)
 endif(EXTRA_LIB)
 mark_as_advanced(EXTRA_LIB EXTRA_LINK_FLAGS)
 
-if(X64 OR ARM64 OR PPC64)
+if(X64 OR ARM64 OR PPC64 OR LOONGARCH64)
     # NOTE: We only officially support high-bit-depth compiles of x265
     # on 64bit architectures. Main10 plus large resolution plus slow
     # preset plus 32bit address space usually means malloc failure.  You
@@ -553,7 +577,7 @@ if(X64 OR ARM64 OR PPC64)
     # license" so to speak.  If it breaks you get to keep both halves.
     # You will need to disable assembly manually.
     option(HIGH_BIT_DEPTH "Store pixel samples as 16bit values (Main10/Main12)" OFF)
-endif(X64 OR ARM64 OR PPC64)
+endif(X64 OR ARM64 OR PPC64 OR LOONGARCH64)
 if(HIGH_BIT_DEPTH)
     option(MAIN12 "Support Main12 instead of Main10" OFF)
     if(MAIN12)
@@ -657,6 +681,10 @@ if(POWER)
         add_definitions(-mcpu=power8 -DX265_ARCH_POWER8=1)
     endif()
 endif()
+
+if(LOONGARCH64)
+    list(APPEND ASM_FLAGS -DHIGH_BIT_DEPTH=0 -DBIT_DEPTH=8 -DX265_NS=${X265_NS})
+endif(LOONGARCH64)
 
 include(Version) # determine X265_VERSION and X265_LATEST_TAG
 include_directories(. common encoder "${PROJECT_BINARY_DIR}")
@@ -791,6 +819,19 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
             add_custom_command(
                 OUTPUT ${ASM}.${SUFFIX}
                 COMMAND ${NASM_EXECUTABLE} ARGS ${NASM_FLAGS} ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                DEPENDS ${ASM_SRC})
+        endforeach()
+    elseif(LOONGARCH64)
+    # compile LOONGARCH arch asm files here
+        enable_language(ASM)
+        foreach(ASM ${LOONGARCH64_ASMS})
+            set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/loongarch64/${ASM})
+            list(APPEND ASM_SRCS ${ASM_SRC})
+            list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
+            add_custom_command(
+                OUTPUT ${ASM}.${SUFFIX}
+                COMMAND ${CMAKE_CXX_COMPILER}
+                ARGS ${LOONGARCH64_ARGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                 DEPENDS ${ASM_SRC})
         endforeach()
     endif()
