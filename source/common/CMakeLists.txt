@@ -84,35 +84,83 @@ if(ENABLE_ASSEMBLY AND X86)
 endif(ENABLE_ASSEMBLY AND X86)
 
 if(ENABLE_ASSEMBLY AND (ARM OR CROSS_COMPILE_ARM))
-    if(ARM64)
-        if(GCC AND (CMAKE_CXX_FLAGS_RELEASE MATCHES "-O3"))
-            message(STATUS "Detected CXX compiler using -O3 optimization level")
-            add_definitions(-DAUTO_VECTORIZE=1)
-        endif()
-        set(C_SRCS asm-primitives.cpp pixel.h ipfilter8.h)
+    set(C_SRCS asm-primitives.cpp pixel.h mc.h ipfilter8.h blockcopy8.h dct8.h loopfilter.h)
 
-        # add ARM assembly/intrinsic files here
-        set(A_SRCS asm.S mc-a.S sad-a.S pixel-util.S ipfilter8.S)
-        set(VEC_PRIMITIVES)
+    # add ARM assembly/intrinsic files here
+    set(A_SRCS asm.S cpu-a.S mc-a.S sad-a.S pixel-util.S ssd-a.S blockcopy8.S ipfilter8.S dct-a.S)
+    set(VEC_PRIMITIVES)
 
-        set(ARM_ASMS "${A_SRCS}" CACHE INTERNAL "ARM Assembly Sources")
-        foreach(SRC ${C_SRCS})
-            set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
-        endforeach()
-    else()
-        set(C_SRCS asm-primitives.cpp pixel.h mc.h ipfilter8.h blockcopy8.h dct8.h loopfilter.h)
-
-        # add ARM assembly/intrinsic files here
-        set(A_SRCS asm.S cpu-a.S mc-a.S sad-a.S pixel-util.S ssd-a.S blockcopy8.S ipfilter8.S dct-a.S)
-        set(VEC_PRIMITIVES)
-
-        set(ARM_ASMS "${A_SRCS}" CACHE INTERNAL "ARM Assembly Sources")
-        foreach(SRC ${C_SRCS})
-            set(ASM_PRIMITIVES ${ASM_PRIMITIVES} arm/${SRC})
-        endforeach()
-    endif()
+    set(ARM_ASMS "${A_SRCS}" CACHE INTERNAL "ARM Assembly Sources")
+    foreach(SRC ${C_SRCS})
+        set(ASM_PRIMITIVES ${ASM_PRIMITIVES} arm/${SRC})
+    endforeach()
     source_group(Assembly FILES ${ASM_PRIMITIVES})
 endif(ENABLE_ASSEMBLY AND (ARM OR CROSS_COMPILE_ARM))
+
+if(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
+    if(GCC AND (CMAKE_CXX_FLAGS_RELEASE MATCHES "-O3"))
+        message(STATUS "Detected CXX compiler using -O3 optimization level")
+        add_definitions(-DAUTO_VECTORIZE=1)
+    endif()
+
+    # Add Arm intrinsics files here.
+    set(C_SRCS_NEON asm-primitives.cpp pixel-prim.h pixel-prim.cpp filter-prim.h filter-prim.cpp dct-prim.h dct-prim.cpp loopfilter-prim.cpp loopfilter-prim.h intrapred-prim.cpp arm64-utils.cpp arm64-utils.h fun-decls.h sao-prim.cpp  mem-neon.h)
+    set(C_SRCS_NEON_DOTPROD filter-neon-dotprod.cpp)
+    set(C_SRCS_NEON_I8MM filter-neon-i8mm.cpp)
+    set(C_SRCS_SVE sao-prim-sve.cpp dct-prim-sve.cpp)
+    set(C_SRCS_SVE2 sao-prim-sve2.cpp)
+    enable_language(ASM)
+
+    # Add Arm assembly files here.
+    set(A_SRCS asm.S mc-a.S mc-a-common.S sad-a.S pixel-util.S pixel-util-common.S p2s.S p2s-common.S blockcopy8.S blockcopy8-common.S ssd-a.S ssd-a-common.S intrapred.S dct.S)
+    set(A_SRCS_NEON_DOTPROD sad-neon-dotprod.S ssd-neon-dotprod.S)
+    set(A_SRCS_SVE asm-sve.S blockcopy8-sve.S p2s-sve.S pixel-util-sve.S)
+    set(A_SRCS_SVE2 mc-a-sve2.S pixel-util-sve2.S ssd-a-sve2.S)
+    set(VEC_PRIMITIVES)
+
+    set(ARM_ASMS "${A_SRCS}" CACHE INTERNAL "ARM Assembly Sources")
+    set(ARM_ASMS_SVE "${A_SRCS_SVE}" CACHE INTERNAL "ARM Assembly Sources that use SVE instruction set")
+    set(ARM_ASMS_SVE2 "${A_SRCS_SVE2}" CACHE INTERNAL "ARM Assembly Sources that use SVE2 instruction set")
+    set(ARM_ASMS_NEON_DOTPROD "${A_SRCS_NEON_DOTPROD}" CACHE INTERNAL "Arm Assembly Sources that use the Neon DotProd extension")
+    foreach(SRC ${C_SRCS_NEON})
+        set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+        set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_NEON_FLAG})
+    endforeach()
+
+    if(CPU_HAS_NEON_DOTPROD)
+        foreach(SRC ${C_SRCS_NEON_DOTPROD})
+            set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+            set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_NEON_DOTPROD_FLAG})
+        endforeach()
+    endif()
+
+    if(CPU_HAS_NEON_I8MM)
+        foreach(SRC ${C_SRCS_NEON_I8MM})
+            set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+            set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_NEON_I8MM_FLAG})
+        endforeach()
+    endif()
+
+    if(CPU_HAS_SVE AND HAVE_SVE_BRIDGE)
+        foreach(SRC ${C_SRCS_SVE})
+            set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+            set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_SVE_FLAG})
+        endforeach()
+    endif()
+
+    if(CPU_HAS_SVE2 AND HAVE_SVE_BRIDGE)
+        foreach(SRC ${C_SRCS_SVE2})
+            set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+            set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_SVE2_FLAG})
+        endforeach()
+    endif()
+
+    source_group(Assembly FILES ${ASM_PRIMITIVES})
+
+    if(AARCH64_WARNINGS_AS_ERRORS)
+        set_source_files_properties(${ASM_PRIMITIVES} PROPERTIES COMPILE_FLAGS -Werror)
+    endif()
+endif(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
 
 if(POWER)
     set_source_files_properties(version.cpp PROPERTIES COMPILE_FLAGS -DX265_VERSION=${X265_VERSION})
@@ -126,6 +174,24 @@ if(POWER)
     endif()
 endif()
 
+if(ENABLE_ASSEMBLY AND LOONGARCH64)
+    if(GCC AND (CMAKE_CXX_FLAGS_RELEASE MATCHES "-O3"))
+        message(STATUS "Detected CXX compiler using -O3 optimization level")
+    endif()
+
+    set(C_SRCS asm-primitives.cpp loopfilter.h ipfilter8.h dct.h pixel.h intrapred.h blockcopy8.h)
+    enable_language(ASM)
+
+    # add loongarch assembly/intrinsic files here
+    set(A_SRCS loopfilter.S ipfilter8.S dct.S mc-a.S intrapred8.S pixel.S ssd.S sad.S mc-a2.S blockcopy8.S)
+
+    set(LOONGARCH64_ASMS "${A_SRCS}" CACHE INTERNAL "LOONGARCH64 Assembly Sources")
+    foreach(SRC ${C_SRCS})
+        set(ASM_PRIMITIVES ${ASM_PRIMITIVES} loongarch64/${SRC})
+    endforeach()
+    source_group(Assembly FILES ${ASM_PRIMITIVES})
+
+endif(ENABLE_ASSEMBLY AND LOONGARCH64)
 
 # set_target_properties can't do list expansion
 string(REPLACE ";" " " VERSION_FLAGS "${VFLAGS}")
@@ -137,7 +203,11 @@ if(HAVE_STRTOK_R)
 endif()
 
 if(GCC AND CC_HAS_NO_NARROWING)
-    set_source_files_properties(cpu.cpp PROPERTIES COMPILE_FLAGS -Wno-narrowing)
+    if(ENABLE_ASSEMBLY)
+        set_source_files_properties(cpu.cpp PROPERTIES COMPILE_FLAGS "-DENABLE_ASSEMBLY=1 -Wno-narrowing")
+    else()
+        set_source_files_properties(cpu.cpp PROPERTIES COMPILE_FLAGS -Wno-narrowing)
+    endif()
 endif()
 if(WIN32)
     set(WINXP winxp.h winxp.cpp)
@@ -169,4 +239,6 @@ add_library(common OBJECT
     scalinglist.cpp scalinglist.h
     quant.cpp quant.h contexts.h
     deblock.cpp deblock.h
-    scaler.cpp scaler.h)
+    scaler.cpp scaler.h
+    ringmem.cpp ringmem.h
+    temporalfilter.cpp temporalfilter.h)

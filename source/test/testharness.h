@@ -73,7 +73,7 @@ protected:
 #include <x86intrin.h>
 #elif ( !defined(__APPLE__) && defined (__GNUC__) && defined(__ARM_NEON__))
 #include <arm_neon.h>
-#elif defined(__GNUC__) && (!defined(__clang__) || __clang_major__ < 4)
+#else
 /* fallback for older GCC/MinGW */
 static inline uint32_t __rdtsc(void)
 {
@@ -82,15 +82,17 @@ static inline uint32_t __rdtsc(void)
 #if X265_ARCH_X86
     asm volatile("rdtsc" : "=a" (a) ::"edx");
 #elif X265_ARCH_ARM
-#if X265_ARCH_ARM64
-    asm volatile("mrs %0, cntvct_el0" : "=r"(a));
-#else
     // TOD-DO: verify following inline asm to get cpu Timestamp Counter for ARM arch
     // asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(a));
 
     // TO-DO: replace clock() function with appropriate ARM cpu instructions
     a = clock();
-#endif
+#elif  X265_ARCH_ARM64
+    asm volatile("isb" : : : "memory");
+    asm volatile("mrs %0, cntvct_el0" : "=r"(a));
+#elif  X265_ARCH_LOONGARCH64
+    uint32_t id = 0;
+    asm volatile("rdtime.d  %0,  %1": "=r"(a), "=r"(id));
 #endif
     return a;
 }
@@ -128,8 +130,8 @@ static inline uint32_t __rdtsc(void)
         x265_emms(); \
         float optperf = (10.0f * cycles / runs) / 4; \
         float refperf = (10.0f * refcycles / refruns) / 4; \
-        printf("\t%3.2fx ", refperf / optperf); \
-        printf("\t %-8.2lf \t %-8.2lf\n", optperf, refperf); \
+        printf(" | \t%3.2fx | ", refperf / optperf); \
+        printf("\t %-8.2lf | \t %-8.2lf\n", optperf, refperf); \
     }
 
 extern "C" {
@@ -140,7 +142,14 @@ int PFX(stack_pagealign)(int (*func)(), int align);
  * needs an explicit asm check because it only sometimes crashes in normal use. */
 intptr_t PFX(checkasm_call)(intptr_t (*func)(), int *ok, ...);
 float PFX(checkasm_call_float)(float (*func)(), int *ok, ...);
-#elif X265_ARCH_ARM == 0
+#elif (X265_ARCH_LOONGARCH64)
+int PFX(stack_pagealign)(int (*func)(), int align);
+
+/* detect when callee-saved regs aren't saved
+ * needs an explicit asm check because it only sometimes crashes in normal use. */
+intptr_t PFX(checkasm_call)(intptr_t (*func)(), int *ok, ...);
+float PFX(checkasm_call_float)(float (*func)(), int *ok, ...);
+#elif (X265_ARCH_ARM == 0 && X265_ARCH_ARM64 == 0)
 #define PFX(stack_pagealign)(func, align) func()
 #endif
 
@@ -173,6 +182,22 @@ void PFX(checkasm_stack_clobber)(uint64_t clobber, ...);
 #elif ARCH_X86
 #define checked(func, ...) PFX(checkasm_call)((intptr_t(*)())func, &m_ok, __VA_ARGS__);
 #define checked_float(func, ...) PFX(checkasm_call_float)((float(*)())func, &m_ok, __VA_ARGS__);
+#elif X265_ARCH_LOONGARCH64
+void PFX(checkasm_stack_clobber)(uint64_t clobber, ...);
+#define checked(func, ...) ( \
+        m_ok = 1, m_rand = (rand() & 0xffff) * 0x0001000100010001ULL, \
+        PFX(checkasm_stack_clobber)(m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, \
+                                    m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, \
+                                    m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand), /* max_args+8 */ \
+        PFX(checkasm_call)((intptr_t(*)())func, &m_ok, 0, 0, 0, 0, 0, 0, __VA_ARGS__))
+
+#define checked_float(func, ...) ( \
+        m_ok = 1, m_rand = (rand() & 0xffff) * 0x0001000100010001ULL, \
+        PFX(checkasm_stack_clobber)(m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, \
+                                    m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, \
+                                    m_rand, m_rand, m_rand, m_rand, m_rand, m_rand, m_rand), /* max_args+8 */ \
+        PFX(checkasm_call_float)((float(*)())func, &m_ok, 0, 0, 0, 0, 0, 0, __VA_ARGS__))
+#define reportfail() if (!m_ok) { fflush(stdout); fprintf(stderr, "stack clobber check failed at %s:%d", __FILE__, __LINE__); abort(); }
 
 #else // if X86_64
 #define checked(func, ...) func(__VA_ARGS__)

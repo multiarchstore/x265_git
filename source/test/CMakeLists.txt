@@ -23,21 +23,30 @@ endif(X86)
 
 # add ARM assembly files
 if(ARM OR CROSS_COMPILE_ARM)
-    if(NOT ARM64)
-        enable_language(ASM)
-        set(NASM_SRC checkasm-arm.S)
-        add_custom_command(
-            OUTPUT checkasm-arm.obj
-            COMMAND ${CMAKE_CXX_COMPILER}
-            ARGS ${NASM_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/checkasm-arm.S -o checkasm-arm.obj
-            DEPENDS checkasm-arm.S)
-    endif()
+    enable_language(ASM)
+    set(NASM_SRC checkasm-arm.S)
+    add_custom_command(
+        OUTPUT checkasm-arm.obj
+        COMMAND ${CMAKE_CXX_COMPILER}
+        ARGS ${NASM_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/checkasm-arm.S -o checkasm-arm.obj
+        DEPENDS checkasm-arm.S)
 endif(ARM OR CROSS_COMPILE_ARM)
 
 # add PowerPC assembly files
 if(POWER)
     set(NASM_SRC)
 endif(POWER)
+
+# add LoongArch64 assembly files
+if(LOONGARCH64)
+    enable_language(ASM)
+    set(NASM_SRC checkasm-loongarch64.S)
+    add_custom_command(
+        OUTPUT checkasm-loongarch64.obj
+        COMMAND ${CMAKE_CXX_COMPILER}
+        ARGS ${NASM_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/checkasm-loongarch64.S -o checkasm-loongarch64.obj
+        DEPENDS checkasm-loongarch64.S)
+endif(LOONGARCH64)
 
 add_executable(TestBench ${NASM_SRC}
     testbench.cpp testharness.h
