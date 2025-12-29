@@ -121,6 +121,17 @@ else()
     message(STATUS "Please add this value near ${CMAKE_CURRENT_LIST_FILE}:${CMAKE_CURRENT_LIST_LINE}")
 endif()
 
+if(X64 OR ARM64 OR PPC64 OR LOONGARCH64)
+    # NOTE: We only officially support high-bit-depth compiles of x265
+    # on 64bit architectures. Main10 plus large resolution plus slow
+    # preset plus 32bit address space usually means malloc failure.  You
+    # can disable this if(X64) check if you desparately need a 32bit
+    # build with 10bit/12bit support, but this violates the "shrink wrap
+    # license" so to speak.  If it breaks you get to keep both halves.
+    # You will need to disable assembly manually.
+    option(HIGH_BIT_DEPTH "Store pixel samples as 16bit values (Main10/Main12)" OFF)
+endif(X64 OR ARM64 OR PPC64 OR LOONGARCH64)
+
 if(UNIX)
     list(APPEND PLATFORM_LIBS pthread)
     find_library(LIBRT rt)
@@ -420,15 +431,19 @@ int main() { return 0; }")
     if(LOONGARCH64)
         set(LOONGARCH64_ARGS -fPIC)
 
-        find_package(LSX)
-        find_package(LASX)
+        if(NOT HIGH_BIT_DEPTH)
 
-        if(SUPPORTS_LSX)
-            add_definitions(-DHAVE_LSX=1)
-        endif()
+          find_package(LSX)
+          find_package(LASX)
 
-        if(SUPPORTS_LASX)
-            add_definitions(-DHAVE_LASX=1)
+          if(SUPPORTS_LSX)
+              add_definitions(-DHAVE_LSX=1)
+          endif()
+
+          if(SUPPORTS_LASX)
+              add_definitions(-DHAVE_LASX=1)
+          endif()
+
         endif()
 
     endif()
@@ -540,7 +555,7 @@ elseif(NASM_FOUND AND X86)
         message(STATUS "Found Nasm ${NASM_VERSION_STRING} to build assembly primitives")
         option(ENABLE_ASSEMBLY "Enable use of assembly coded primitives" ON)
     endif()
-elseif(LOONGARCH64)
+elseif(LOONGARCH64 AND NOT HIGH_BIT_DEPTH)
     option(ENABLE_ASSEMBLY "Enable use of assembly coded primitives" ON)
 else()
     option(ENABLE_ASSEMBLY "Enable use of assembly coded primitives" OFF)
@@ -570,16 +585,6 @@ if(EXTRA_LIB)
 endif(EXTRA_LIB)
 mark_as_advanced(EXTRA_LIB EXTRA_LINK_FLAGS)
 
-if(X64 OR ARM64 OR PPC64 OR LOONGARCH64)
-    # NOTE: We only officially support high-bit-depth compiles of x265
-    # on 64bit architectures. Main10 plus large resolution plus slow
-    # preset plus 32bit address space usually means malloc failure.  You
-    # can disable this if(X64) check if you desparately need a 32bit
-    # build with 10bit/12bit support, but this violates the "shrink wrap
-    # license" so to speak.  If it breaks you get to keep both halves.
-    # You will need to disable assembly manually.
-    option(HIGH_BIT_DEPTH "Store pixel samples as 16bit values (Main10/Main12)" OFF)
-endif(X64 OR ARM64 OR PPC64 OR LOONGARCH64)
 if(HIGH_BIT_DEPTH)
     option(MAIN12 "Support Main12 instead of Main10" OFF)
     if(MAIN12)
@@ -587,7 +592,7 @@ if(HIGH_BIT_DEPTH)
     else()
         add_definitions(-DHIGH_BIT_DEPTH=1 -DX265_DEPTH=10)
     endif()
-else(HIGH_BIT_DEPTH)
+else()
     add_definitions(-DHIGH_BIT_DEPTH=0 -DX265_DEPTH=8)
 endif(HIGH_BIT_DEPTH)
 
@@ -662,7 +667,7 @@ if(WIN32)
         # force use of workarounds for CONDITION_VARIABLE and atomic
         # intrinsics introduced after XP
         add_definitions(-D_WIN32_WINNT=_WIN32_WINNT_WINXP -D_WIN32_WINNT_WIN7=0x0601)
-    else(WINXP_SUPPORT)
+    else()
         # default to targeting Windows 7 for the NUMA APIs
         add_definitions(-D_WIN32_WINNT=_WIN32_WINNT_WIN7)
     endif(WINXP_SUPPORT)
@@ -828,19 +833,21 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                 COMMAND ${NASM_EXECUTABLE} ARGS ${NASM_FLAGS} ${ASM_SRC} -o ${ASM}.${SUFFIX}
                 DEPENDS ${ASM_SRC})
         endforeach()
-    elseif(LOONGARCH64 AND NOT HIGH_BIT_DEPTH)
+    elseif(LOONGARCH64)
     # compile LOONGARCH arch asm files here
-        enable_language(ASM)
-        foreach(ASM ${LOONGARCH64_ASMS})
-            set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/loongarch64/${ASM})
-            list(APPEND ASM_SRCS ${ASM_SRC})
-            list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
-            add_custom_command(
-                OUTPUT ${ASM}.${SUFFIX}
-                COMMAND ${CMAKE_CXX_COMPILER}
-                ARGS ${LOONGARCH64_ARGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
-                DEPENDS ${ASM_SRC})
-        endforeach()
+        if(NOT HIGH_BIT_DEPTH)
+          enable_language(ASM)
+          foreach(ASM ${LOONGARCH64_ASMS})
+              set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/loongarch64/${ASM})
+              list(APPEND ASM_SRCS ${ASM_SRC})
+              list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
+              add_custom_command(
+                  OUTPUT ${ASM}.${SUFFIX}
+                  COMMAND ${CMAKE_CXX_COMPILER}
+                  ARGS ${LOONGARCH64_ARGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                  DEPENDS ${ASM_SRC})
+          endforeach()
+        endif()
     endif()
 endif()
 source_group(ASM FILES ${ASM_SRCS})
