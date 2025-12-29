@@ -685,7 +685,12 @@ if(POWER)
 endif()
 
 if(LOONGARCH64)
+  if(HIGH_BIT_DEPTH)
+    # LoongArch64 dose not support high bit depth, so we disable it and give a warning.
+    message(WARNING "LoongArch64 dose not support high bit depth, so we disable it.")
+  else()
     list(APPEND ASM_FLAGS -DHIGH_BIT_DEPTH=0 -DBIT_DEPTH=8 -DX265_NS=${X265_NS})
+  endif()
 endif(LOONGARCH64)
 
 include(Version) # determine X265_VERSION and X265_LATEST_TAG
@@ -823,7 +828,7 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                 COMMAND ${NASM_EXECUTABLE} ARGS ${NASM_FLAGS} ${ASM_SRC} -o ${ASM}.${SUFFIX}
                 DEPENDS ${ASM_SRC})
         endforeach()
-    elseif(LOONGARCH64)
+    elseif(LOONGARCH64 AND NOT HIGH_BIT_DEPTH)
     # compile LOONGARCH arch asm files here
         enable_language(ASM)
         foreach(ASM ${LOONGARCH64_ASMS})
