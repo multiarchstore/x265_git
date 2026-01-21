@@ -437,10 +437,12 @@ int main() { return 0; }")
           find_package(LASX)
 
           if(SUPPORTS_LSX)
+              message(STATUS "Found LSX")
               add_definitions(-DHAVE_LSX=1)
           endif()
 
           if(SUPPORTS_LASX)
+              message(STATUS "Found LASX")
               add_definitions(-DHAVE_LASX=1)
           endif()
 

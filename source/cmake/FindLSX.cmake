@@ -9,6 +9,8 @@ if(LOONGARCH64)
             );
             return 0; }")
 
+    set(CMAKE_REQUIRED_FLAGS ${CMAKE_CXX_FLAGS})
+
     check_cxx_source_compiles("${CHECK_LSX_CODE}" SUPPORTS_LSX)
 
 endif()

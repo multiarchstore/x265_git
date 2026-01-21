@@ -9,9 +9,11 @@ set(CMAKE_SYSTEM_PROCESSOR loongarch64)
 # specify the cross compiler (giving precedence to user-supplied CC/CXX)
 if(NOT DEFINED CMAKE_C_COMPILER)
     set(CMAKE_C_COMPILER loongarch64-linux-gnu-gcc)
+    set(CMKAE_C_FLAGS_INIT "-msimd=lsx")
 endif()
 if(NOT DEFINED CMAKE_CXX_COMPILER)
     set(CMAKE_CXX_COMPILER loongarch64-linux-gnu-g++)
+    set(CMKAE_C_FLAGS_INIT "-msimd=lsx")
 endif()
 
 # specify the target environment

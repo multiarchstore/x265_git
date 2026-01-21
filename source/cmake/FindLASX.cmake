@@ -3,11 +3,17 @@ include(FindPackageHandleStandardArgs)
 if(LOONGARCH64)
 
     set(CHECK_LASX_CODE "
+        #include <lasxintrin.h>
         int main(int argc, char **argv) {
-            __asm__ volatile (
-               \"xvadd.w $xr0, $xr1, $xr1\"
-            );
-           return 0; }")
+            __m256i x = __m256i{
+                static_cast<long long>(0x1122334455667788ULL),
+                static_cast<long long>(0x99aabbccddeeff00ULL),
+                static_cast<long long>(0xabcdef1212341234ULL),
+                static_cast<long long>(0xaabbaabbddeeddeeULL)
+            };
+            return 0; }")
+
+    set(CMAKE_REQUIRED_FLAGS ${CMAKE_CXX_FLAGS})
 
     check_cxx_source_compiles("${CHECK_LASX_CODE}" SUPPORTS_LASX)
 
