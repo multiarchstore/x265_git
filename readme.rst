@@ -1,6 +1,9 @@
 =================
-x265 HEVC Encoder
+x265 HEVC Encoder. 
 =================
+====
+No longer updates! LoongArch support is already in upstream: https://github.com/Multicorewareinc/x265
+====
 
 | **Read:** | Online `documentation <http://x265.readthedocs.org/en/master/>`_ | Developer `wiki <http://bitbucket.org/multicoreware/x265_git/wiki/>`_
 | **Download:** | `releases <http://ftp.videolan.org/pub/videolan/x265/>`_ 
